@@ -23,9 +23,11 @@
 
 // function forward declaration
 void parse_http_request(char * request);
+char* print_ip(unsigned int ip);
 
 //global variable declaration
 static char *filename;
+
 
 void sigchld_handler(int s)
 {
@@ -112,6 +114,15 @@ int main(void)
 		perror("sigaction");
 		exit(1);
 	}
+
+	unsigned int A;
+	unsigned int B;
+	char a=0x00;
+	char b=0x01;
+
+	A=a<<8|b;
+	B=b<<8|a;
+	// 2printf("%c,%c,%d,%d\n",a,b,A,B);
 	printf("server: waiting for connections...\n");
 
     
@@ -127,28 +138,98 @@ int main(void)
 			s, sizeof s);
 		printf("server: got connection from %s\n", s);
 
-		char request[99999];
+
+		unsigned char request[99999];
 		bzero(request,99999);
 		if((recv(new_fd,request,99999,0))==-1){
 			perror("recv error");
 			return 1;
 		}
+		
+
         if(!fork()){  // child process
+			// close(sockfd);
+			unsigned char reply[8];
+			reply[0]=0;
+			reply[1]=0x5A;
+			reply[2]=request[2];
+			reply[3]=request[3];
+			reply[4]=request[4];
+			reply[5]=request[5];
+			reply[6]=request[6];
+			reply[7]=request[7];
             unsigned char VN = request[0];
             unsigned char CD = request[1];
-            unsigned int DST_PORT = request[2]<< 8 | request[3];  // 1151:-128 1279:-1
-            unsigned int DST_IP = request[4] <<24 | request[5] <<16 | request[6] <<8 | request[7];
+			unsigned int DST_PORT;
+        	unsigned int DST_IP;
+			
+            DST_PORT = (request[2] << 8 | request[3]);
+            DST_IP = request[4] << 24 | request[5] << 16 | request[6] << 8 | request[7];
             char * USER_ID =request +8;
 
             printf("%c,%c,%u,%u,%s\n",VN,CD,DST_PORT,DST_IP,USER_ID);
-            if(VN==0x04) {
+			int32_t ip;
+			ip=(int32_t)DST_IP;
+			struct in_addr ip_addr;
+			ip_addr.s_addr = ip;
+			// printf("The IP address is %s\n", inet_ntoa(ip_addr));
+			
+			char * ip_chr=print_ip(DST_IP);
+			printf("ip is :%s\n",ip_chr);
+            if(VN==0x04 && CD==0x01) {
                 printf("it is SOCKS request!\n");
-            }else printf("it is not SOCKS request!\n");
-            if(CD==0x01) {
-                printf("Accept!\n");
-            }else printf("Reject!\n");
-        }
-		close(new_fd);  // parent doesn't need this.
+				write(new_fd,reply,8);
+				bzero(request,99999);
+				recv(new_fd,request,99999,0);
+				printf("-http request: %s\n\n\n",request);
+
+				//connect to the client. just connect the distination.
+				
+				char http_reply[99999];
+				bzero(http_reply,99999);
+				//creat a socket
+				int toDST = 0;
+				toDST = socket(AF_INET , SOCK_STREAM , 0);
+
+				if (toDST == -1){
+					printf("Fail to create a socket.");
+				}
+
+				//socket的連線
+				struct sockaddr_in info;
+				bzero(&info,sizeof(info));
+				info.sin_family = PF_INET;
+				// info.sin_addr.s_addr = ip;
+				// info.sin_port = htons(DST_PORT);
+				// info.sin_addr.s_addr = inet_addr("140.113.207.238");
+				info.sin_addr.s_addr = inet_addr(ip_chr);
+				info.sin_port = htons(DST_PORT);
+				
+				int err = connect(toDST,(struct sockaddr *)&info,sizeof(info));
+				if(err==-1){
+					printf("Connection error");
+				}else printf("\n\ntoDST:%d\n\n",toDST);
+				write(toDST,request,(int)strlen(request));
+				recv(toDST,http_reply,99999,0);
+				write(new_fd,http_reply,(int)strlen(http_reply));
+
+
+				/*int fd;
+				int bytes_read;
+				char data_to_send[1024];
+				char *path="/home/ekko/index.html";
+				if ( (fd=open(path, O_RDONLY))!=-1 )    //FILE FOUND
+				{
+					write(new_fd, "HTTP/1.1 200 OK\n\n", 17);
+					// send(new_fd, "HTTP/1.0 200 OK\n\n", 17, 0);
+					while ( (bytes_read=read(fd, data_to_send, BYTES))>0 )
+						write (new_fd, data_to_send, bytes_read);
+				}
+				else    write(new_fd, "HTTP/1.1 404 Not Found\n\n", 23); //FILE NOT FOUND
+				close(fd); */
+            }else printf("it is not SOCKS request or Reject!\n");
+			close(new_fd);
+        }close(new_fd);  // parent doesn't need this.
 	}
 
 	return 0;
@@ -176,4 +257,20 @@ void parse_http_request(char * request){
 	if(strncmp(filename,"/\0",2)==0) filename="/index.html";
 	if(query!=NULL) setenv("QUERY_STRING",query,1);
 	else unsetenv("QUERY_STRING");
+}
+
+char* print_ip(unsigned int ip)
+{	
+	char *ret;
+	char ip_char[20];
+	ret=ip_char;
+    unsigned char bytes[4];
+    bytes[0] = ip & 0xFF;
+    bytes[1] = (ip >> 8) & 0xFF;
+    bytes[2] = (ip >> 16) & 0xFF;
+    bytes[3] = (ip >> 24) & 0xFF;
+	sprintf(ip_char,"%d.%d.%d.%d",bytes[3], bytes[2], bytes[1], bytes[0]);
+    printf("%d.%d.%d.%d\n", bytes[3], bytes[2], bytes[1], bytes[0]);
+	// printf("%s\n",ip_char);
+	return ret;
 }
