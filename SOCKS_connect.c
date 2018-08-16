@@ -35,6 +35,7 @@ void parse_http_request(char * request);
 void print_ip(unsigned int ip);
 int check_permit(char mode,char* ip);
 
+
 //global variable declaration
 static char *filename;
 static char ip_char[20];
@@ -284,16 +285,15 @@ int main(void)
 
 				FD_SET(toDST,&read_fds);
 
-				int flag=1;
 
-				while(flag){
+				while(1){
 					tmpread_fds = read_fds;
 					select(getdtablesize(), &tmpread_fds, NULL, NULL, NULL);
 					if(FD_ISSET(new_fd,&tmpread_fds)){
 						bzero(request,99999);  //unsign or sign
 						int n=recv(new_fd,request,99999,0);
 						if(n==0) break;
-						// printf("request:%s\n",request);
+						printf("(C)request:%s\n",request);
 						write(toDST,request,n);
 												
 					}else if(FD_ISSET(toDST,&tmpread_fds)){
@@ -304,7 +304,7 @@ int main(void)
 						// char cpreply[99999];
 						// strcpy(cpreply,DST_reply);
 						// if(strstr(cpreply,"</html>")!=NULL) flag=0;
-						// printf("DST_reply:%s\n",DST_reply);
+						printf("(C)DST_reply:%s\n",DST_reply);
 						fflush(stdout);
 						write(new_fd,DST_reply,n);
 					}
@@ -332,6 +332,9 @@ int main(void)
 					reply[1]=0x5B;
 					write(new_fd,reply,8);
 					exit(0);
+				}else {
+					int w=write(new_fd,reply,8);
+					printf("write:%d\n",w);
 				}
 			
 				int bindsock= socket(AF_INET , SOCK_STREAM , 0);
@@ -372,26 +375,25 @@ int main(void)
 
 				FD_SET(toDST,&read_fds);
 
-				int flag=1;
-				while(flag){
+				
+				while(1){
 					tmpread_fds = read_fds;
 					select(getdtablesize(), &tmpread_fds, NULL, NULL, NULL);
 					if(FD_ISSET(new_fd,&tmpread_fds)){
 						// bzero(request,1024);  //unsign or sign
-						unsigned char requests[1024]={0};
-						// bzero(requests,1024);
+						unsigned char requests[1024];
+						bzero(requests,1024);
 						int n=recv(new_fd,requests,1024,0);
 						if(n==0) break;
 						printf("----(B)request:%s\n",requests);
 						write(toDST,requests,n);
-												
 					}else if(FD_ISSET(toDST,&tmpread_fds)){
 						// bzero(DST_reply,1024);
-						unsigned char D_reply[1024]={0};
-						// bzero(D_reply,1024);
+						unsigned char D_reply[1024];
+						bzero(D_reply,1024);
 						int n =recv(toDST,D_reply,1024,0);
 						if(n==0) break;
-						printf("----(B)DST_reply:%s\n",D_reply);
+						printf("----(B):DST_reply:%s\n",D_reply);
 						fflush(stdout);
 						write(new_fd,D_reply,n);
 					}
